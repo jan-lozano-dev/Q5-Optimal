@@ -11,6 +11,7 @@ on:
 
 # Creating/editing an issue can emit several events (opened + one labeled event
 # per label). Keep only the newest sync so runs do not race each other.
+# Push/dispatch events have no TARGET_ISSUE and therefore reconcile the full project.
 concurrency:
   group: q5-project-sync-${{ github.repository }}
   cancel-in-progress: true
