@@ -20,7 +20,7 @@ jobs:
       PROJECT_TOKEN: ${{ secrets.project_apt || secrets.PROJECT_PAT || secrets.PROJECT_TOKEN }}
       REPO_TOKEN: ${{ github.token }}
       PROJECT_OWNER: jan-lozano-dev
-      PROJECT_TITLE: Cientifical Studying
+      PROJECT_TITLE: "@jan-lozano-dev's Cientifical Studying"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
