@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/q5-project-sync.yml'
-      - '.github/scripts/q5_project_sync.sh'
+      - '.github/scripts/q5_project_sync_v2.sh'
   issues:
     types: [opened, edited, labeled, unlabeled, closed, reopened]
   workflow_dispatch:
@@ -20,7 +20,7 @@ jobs:
       PROJECT_TOKEN: ${{ secrets.project_apt || secrets.PROJECT_PAT || secrets.PROJECT_TOKEN }}
       REPO_TOKEN: ${{ github.token }}
       PROJECT_OWNER: jan-lozano-dev
-      PROJECT_TITLE: "@jan-lozano-dev's Cientifical Studying"
+      PROJECT_NUMBER: 2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,4 +33,4 @@ jobs:
           fi
 
       - name: Sync Q5 Optimal project
-        run: bash .github/scripts/q5_project_sync.sh
+        run: bash .github/scripts/q5_project_sync_v2.sh
