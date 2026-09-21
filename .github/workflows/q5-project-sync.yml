@@ -9,6 +9,12 @@ on:
     types: [opened, edited, labeled, unlabeled, closed, reopened]
   workflow_dispatch:
 
+# Creating/editing an issue can emit several events (opened + one labeled event
+# per label). Keep only the newest sync so runs do not race each other.
+concurrency:
+  group: q5-project-sync-${{ github.repository }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   issues: write
@@ -21,6 +27,7 @@ jobs:
       REPO_TOKEN: ${{ github.token }}
       PROJECT_OWNER: jan-lozano-dev
       PROJECT_NUMBER: 2
+      TARGET_ISSUE: ${{ github.event.issue.number || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
