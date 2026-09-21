@@ -17,7 +17,7 @@ jobs:
   sync-project:
     runs-on: ubuntu-latest
     env:
-      PROJECT_TOKEN: ${{ secrets.PROJECT_PAT }}
+      PROJECT_TOKEN: ${{ secrets.PROJECT_PAT || secrets.PROJECT_TOKEN }}
       REPO_TOKEN: ${{ github.token }}
       PROJECT_OWNER: jan-lozano-dev
       PROJECT_TITLE: Q5 Optimal
@@ -28,7 +28,7 @@ jobs:
       - name: Validate project token
         run: |
           if [ -z "${PROJECT_TOKEN}" ]; then
-            echo "PROJECT_PAT repository secret is missing."
+            echo "Neither PROJECT_PAT nor PROJECT_TOKEN exists as an Actions repository secret."
             exit 1
           fi
 
