@@ -1,0 +1,36 @@
+name: Q5 Project Sync
+
+on:
+  push:
+    paths:
+      - '.github/workflows/q5-project-sync.yml'
+      - '.github/scripts/q5_project_sync.sh'
+  issues:
+    types: [opened, edited, labeled, unlabeled, closed, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync-project:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_TOKEN: ${{ secrets.PROJECT_PAT }}
+      REPO_TOKEN: ${{ github.token }}
+      PROJECT_OWNER: jan-lozano-dev
+      PROJECT_TITLE: Q5 Optimal
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate project token
+        run: |
+          if [ -z "${PROJECT_TOKEN}" ]; then
+            echo "PROJECT_PAT repository secret is missing."
+            exit 1
+          fi
+
+      - name: Sync Q5 Optimal project
+        run: bash .github/scripts/q5_project_sync.sh
