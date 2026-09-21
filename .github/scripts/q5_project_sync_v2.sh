@@ -6,12 +6,12 @@ set -euo pipefail
 : "${PROJECT_OWNER:=jan-lozano-dev}"
 : "${PROJECT_NUMBER:=2}"
 : "${GITHUB_REPOSITORY:=jan-lozano-dev/Q5-Optimal}"
+TARGET_ISSUE="${TARGET_ISSUE:-}"
 
 export GH_TOKEN="$PROJECT_TOKEN"
 
 log() { printf '\n==> %s\n' "$*"; }
 
-# --- Project discovery by stable project number ---
 log "Opening Project #$PROJECT_NUMBER for $PROJECT_OWNER"
 project_json=$(gh api graphql \
   -f query='query($login:String!,$number:Int!){user(login:$login){projectV2(number:$number){id title number}}}' \
@@ -79,45 +79,50 @@ ensure_label() {
     -f name="$name" -f color="$color" -f description="$description" >/dev/null 2>&1 || true
 }
 
-# --- Configure Status options ---
+# Full setup only for manual/push runs. Issue events skip this expensive setup.
 fields_json=$(query_fields)
-status_field_id=$(jq -r '.data.node.fields.nodes[] | select(.name=="Status") | .id' <<<"$fields_json" | head -n1)
-if [[ -z "$status_field_id" || "$status_field_id" == "null" ]]; then
-  echo "Status field not found" >&2
-  exit 3
+if [[ -z "$TARGET_ISSUE" ]]; then
+  status_field_id=$(jq -r '.data.node.fields.nodes[] | select(.name=="Status") | .id' <<<"$fields_json" | head -n1)
+  if [[ -z "$status_field_id" || "$status_field_id" == "null" ]]; then
+    echo "Status field not found" >&2
+    exit 3
+  fi
+
+  log "Configuring mastery statuses"
+  gh api graphql -f query='mutation($f:ID!){updateProjectV2Field(input:{fieldId:$f,singleSelectOptions:[{name:"Backlog",color:GRAY,description:"Not selected for current sprint"},{name:"This Sprint",color:BLUE,description:"Committed outcome for current sprint"},{name:"Learning",color:YELLOW,description:"Building the mental model"},{name:"Practice",color:ORANGE,description:"Applying with exercises or code"},{name:"Retrieval",color:PURPLE,description:"Delayed closed-book retrieval"},{name:"Exam Ready",color:GREEN,description:"Passed the mastery gate under exam-like conditions"},{name:"Done",color:PINK,description:"Assessed or no longer needs maintenance"}]}){projectV2Field{... on ProjectV2SingleSelectField{id}}}}' -f f="$status_field_id" >/dev/null
+
+  fields_json=$(query_fields)
+  create_subject_field
+  fields_json=$(query_fields)
+  create_priority_field
+  fields_json=$(query_fields)
+  create_sprint_field
+  fields_json=$(query_fields)
+  create_next_review_field
+  fields_json=$(query_fields)
+
+  log "Ensuring control labels"
+  ensure_label "stage:backlog" "6e7781" "Move project item to Backlog"
+  ensure_label "stage:this-sprint" "1f6feb" "Move project item to This Sprint"
+  ensure_label "stage:learning" "d4c5f9" "Move project item to Learning"
+  ensure_label "stage:practice" "fb8500" "Move project item to Practice"
+  ensure_label "stage:retrieval" "8250df" "Move project item to Retrieval"
+  ensure_label "stage:exam-ready" "2da44e" "Move project item to Exam Ready"
+  ensure_label "stage:done" "bf8700" "Move project item to Done"
+  for s in PROP INTERNET SODX ESIN PACO ADSO French Econometrics; do ensure_label "subject:$s" "0969da" "Subject metadata"; done
+  for p in P0 P1 P2 P3; do ensure_label "priority:$p" "b60205" "Priority metadata"; done
+  for t in Concept Coding Problems Lab Exam Admin; do ensure_label "type:$t" "5319e7" "Task type metadata"; done
+  for s in $(seq 1 16); do ensure_label "sprint:$s" "c5def5" "Semester week / target sprint $s"; done
 fi
 
-log "Configuring mastery statuses"
-gh api graphql -f query='mutation($f:ID!){updateProjectV2Field(input:{fieldId:$f,singleSelectOptions:[{name:"Backlog",color:GRAY,description:"Not selected for current sprint"},{name:"This Sprint",color:BLUE,description:"Committed outcome for current sprint"},{name:"Learning",color:YELLOW,description:"Building the mental model"},{name:"Practice",color:ORANGE,description:"Applying with exercises or code"},{name:"Retrieval",color:PURPLE,description:"Delayed closed-book retrieval"},{name:"Exam Ready",color:GREEN,description:"Passed the mastery gate under exam-like conditions"},{name:"Done",color:PINK,description:"Assessed or no longer needs maintenance"}]}){projectV2Field{... on ProjectV2SingleSelectField{id}}}}' -f f="$status_field_id" >/dev/null
-
-# --- Custom fields ---
-fields_json=$(query_fields)
-create_subject_field
-fields_json=$(query_fields)
-create_priority_field
-fields_json=$(query_fields)
-create_sprint_field
-fields_json=$(query_fields)
-create_next_review_field
-fields_json=$(query_fields)
-
-# --- Labels are the command interface from issues to the Project ---
-log "Ensuring control labels"
-ensure_label "stage:backlog" "6e7781" "Move project item to Backlog"
-ensure_label "stage:this-sprint" "1f6feb" "Move project item to This Sprint"
-ensure_label "stage:learning" "d4c5f9" "Move project item to Learning"
-ensure_label "stage:practice" "fb8500" "Move project item to Practice"
-ensure_label "stage:retrieval" "8250df" "Move project item to Retrieval"
-ensure_label "stage:exam-ready" "2da44e" "Move project item to Exam Ready"
-ensure_label "stage:done" "bf8700" "Move project item to Done"
-for s in PROP INTERNET SODX ESIN PACO ADSO French Econometrics; do ensure_label "subject:$s" "0969da" "Subject metadata"; done
-for p in P0 P1 P2 P3; do ensure_label "priority:$p" "b60205" "Priority metadata"; done
-for t in Concept Coding Problems Lab Exam Admin; do ensure_label "type:$t" "5319e7" "Task type metadata"; done
-for s in $(seq 1 16); do ensure_label "sprint:$s" "c5def5" "Semester week / target sprint $s"; done
-
-# --- Add/sync all repo issues ---
-log "Syncing issues into Project"
-issue_numbers=$(GH_TOKEN="$REPO_TOKEN" gh api --paginate "repos/$GITHUB_REPOSITORY/issues?state=all&per_page=100" --jq '.[] | select(.pull_request == null) | .number')
+# Issue event: sync only that issue. Push/manual run: reconcile all issues.
+if [[ -n "$TARGET_ISSUE" ]]; then
+  issue_numbers="$TARGET_ISSUE"
+  log "Syncing changed issue #$TARGET_ISSUE"
+else
+  issue_numbers=$(GH_TOKEN="$REPO_TOKEN" gh api --paginate "repos/$GITHUB_REPOSITORY/issues?state=all&per_page=100" --jq '.[] | select(.pull_request == null) | .number')
+  log "Reconciling all repo issues"
+fi
 
 for n in $issue_numbers; do
   issue_json=$(GH_TOKEN="$REPO_TOKEN" gh api "repos/$GITHUB_REPOSITORY/issues/$n")
@@ -140,7 +145,6 @@ for n in $issue_numbers; do
   elif grep -Fxq "stage:learning" <<<"$labels"; then status="Learning"
   elif grep -Fxq "stage:this-sprint" <<<"$labels"; then status="This Sprint"
   elif grep -Fxq "stage:done" <<<"$labels"; then status="Done"
-  elif grep -Fxq "stage:backlog" <<<"$labels"; then status="Backlog"
   fi
   set_single "$item_id" Status "$status"
 
