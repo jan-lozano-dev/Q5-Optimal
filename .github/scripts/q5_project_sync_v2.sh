@@ -50,7 +50,7 @@ create_priority_field() {
 create_sprint_field() {
   field_exists "Sprint" && return 0
   log "Creating Sprint field"
-  gh api graphql -f query='mutation($p:ID!){createProjectV2Field(input:{projectId:$p,name:"Sprint",dataType:SINGLE_SELECT,singleSelectOptions:[{name:"Sprint 1",color:BLUE,description:"Current sprint"},{name:"Sprint 2",color:GREEN,description:"Sprint 2"},{name:"Sprint 3",color:YELLOW,description:"Sprint 3"},{name:"Sprint 4",color:ORANGE,description:"Sprint 4"},{name:"Sprint 5",color:PURPLE,description:"Sprint 5"},{name:"Sprint 6",color:PINK,description:"Sprint 6"},{name:"Sprint 7",color:BLUE,description:"Sprint 7"},{name:"Sprint 8",color:GREEN,description:"Sprint 8"},{name:"Sprint 9",color:YELLOW,description:"Sprint 9"},{name:"Sprint 10",color:ORANGE,description:"Sprint 10"},{name:"Sprint 11",color:PURPLE,description:"Sprint 11"},{name:"Sprint 12",color:PINK,description:"Sprint 12"},{name:"Sprint 13",color:BLUE,description:"Sprint 13"},{name:"Sprint 14",color:GREEN,description:"Sprint 14"},{name:"Sprint 15",color:YELLOW,description:"Sprint 15"},{name:"Sprint 16",color:GRAY,description:"Sprint 16"}]}){projectV2Field{... on ProjectV2SingleSelectField{id}}}}' -f p="$project_id" >/dev/null
+  gh api graphql -f query='mutation($p:ID!){createProjectV2Field(input:{projectId:$p,name:"Sprint",dataType:SINGLE_SELECT,singleSelectOptions:[{name:"Sprint 1",color:BLUE,description:"Semester week 1"},{name:"Sprint 2",color:GREEN,description:"Semester week 2"},{name:"Sprint 3",color:YELLOW,description:"Semester week 3"},{name:"Sprint 4",color:ORANGE,description:"Semester week 4"},{name:"Sprint 5",color:PURPLE,description:"Semester week 5"},{name:"Sprint 6",color:PINK,description:"Semester week 6"},{name:"Sprint 7",color:BLUE,description:"Semester week 7"},{name:"Sprint 8",color:GREEN,description:"Semester week 8"},{name:"Sprint 9",color:YELLOW,description:"Semester week 9"},{name:"Sprint 10",color:ORANGE,description:"Semester week 10"},{name:"Sprint 11",color:PURPLE,description:"Semester week 11"},{name:"Sprint 12",color:PINK,description:"Semester week 12"},{name:"Sprint 13",color:BLUE,description:"Semester week 13"},{name:"Sprint 14",color:GREEN,description:"Semester week 14"},{name:"Sprint 15",color:YELLOW,description:"Semester week 15"},{name:"Sprint 16",color:GRAY,description:"Semester week 16"}]}){projectV2Field{... on ProjectV2SingleSelectField{id}}}}' -f p="$project_id" >/dev/null
 }
 
 create_next_review_field() {
@@ -79,15 +79,6 @@ ensure_label() {
     -f name="$name" -f color="$color" -f description="$description" >/dev/null 2>&1 || true
 }
 
-add_label_if_missing() {
-  local issue="$1" label="$2"
-  if ! GH_TOKEN="$REPO_TOKEN" gh api "repos/$GITHUB_REPOSITORY/issues/$issue/labels" --jq '.[].name' 2>/dev/null | grep -Fxq "$label"; then
-    GH_TOKEN="$REPO_TOKEN" gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$issue/labels" --input - >/dev/null <<JSON
-{"labels":["$label"]}
-JSON
-  fi
-}
-
 # --- Configure Status options ---
 fields_json=$(query_fields)
 status_field_id=$(jq -r '.data.node.fields.nodes[] | select(.name=="Status") | .id' <<<"$fields_json" | head -n1)
@@ -99,7 +90,7 @@ fi
 log "Configuring mastery statuses"
 gh api graphql -f query='mutation($f:ID!){updateProjectV2Field(input:{fieldId:$f,singleSelectOptions:[{name:"Backlog",color:GRAY,description:"Not selected for current sprint"},{name:"This Sprint",color:BLUE,description:"Committed outcome for current sprint"},{name:"Learning",color:YELLOW,description:"Building the mental model"},{name:"Practice",color:ORANGE,description:"Applying with exercises or code"},{name:"Retrieval",color:PURPLE,description:"Delayed closed-book retrieval"},{name:"Exam Ready",color:GREEN,description:"Passed the mastery gate under exam-like conditions"},{name:"Done",color:PINK,description:"Assessed or no longer needs maintenance"}]}){projectV2Field{... on ProjectV2SingleSelectField{id}}}}' -f f="$status_field_id" >/dev/null
 
-# --- Custom fields (avoid reserved GitHub field name Type) ---
+# --- Custom fields ---
 fields_json=$(query_fields)
 create_subject_field
 fields_json=$(query_fields)
@@ -110,7 +101,7 @@ fields_json=$(query_fields)
 create_next_review_field
 fields_json=$(query_fields)
 
-# --- Labels are the command interface from ChatGPT / issues to the Project ---
+# --- Labels are the command interface from issues to the Project ---
 log "Ensuring control labels"
 ensure_label "stage:backlog" "6e7781" "Move project item to Backlog"
 ensure_label "stage:this-sprint" "1f6feb" "Move project item to This Sprint"
@@ -122,27 +113,7 @@ ensure_label "stage:done" "bf8700" "Move project item to Done"
 for s in PROP INTERNET SODX ESIN PACO ADSO French Econometrics; do ensure_label "subject:$s" "0969da" "Subject metadata"; done
 for p in P0 P1 P2 P3; do ensure_label "priority:$p" "b60205" "Priority metadata"; done
 for t in Concept Coding Problems Lab Exam Admin; do ensure_label "type:$t" "5319e7" "Task type metadata"; done
-
-initialize_issue() {
-  local n="$1" subject="$2" priority="$3" type="$4" stage="$5"
-  add_label_if_missing "$n" "subject:$subject"
-  add_label_if_missing "$n" "priority:$priority"
-  add_label_if_missing "$n" "type:$type"
-  add_label_if_missing "$n" "stage:$stage"
-}
-
-# Initial Sprint 1 metadata
-for n in 1 2 3 4 5; do
-  if GH_TOKEN="$REPO_TOKEN" gh api "repos/$GITHUB_REPOSITORY/issues/$n" >/dev/null 2>&1; then
-    case "$n" in
-      1) initialize_issue 1 PROP P0 Coding learning ;;
-      2) initialize_issue 2 INTERNET P0 Problems this-sprint ;;
-      3) initialize_issue 3 SODX P0 Exam this-sprint ;;
-      4) initialize_issue 4 ESIN P1 Coding this-sprint ;;
-      5) initialize_issue 5 PACO P1 Lab this-sprint ;;
-    esac
-  fi
-done
+for s in $(seq 1 16); do ensure_label "sprint:$s" "c5def5" "Semester week / target sprint $s"; done
 
 # --- Add/sync all repo issues ---
 log "Syncing issues into Project"
@@ -169,14 +140,19 @@ for n in $issue_numbers; do
   elif grep -Fxq "stage:learning" <<<"$labels"; then status="Learning"
   elif grep -Fxq "stage:this-sprint" <<<"$labels"; then status="This Sprint"
   elif grep -Fxq "stage:done" <<<"$labels"; then status="Done"
+  elif grep -Fxq "stage:backlog" <<<"$labels"; then status="Backlog"
   fi
   set_single "$item_id" Status "$status"
 
   subject=$(sed -n 's/^subject://p' <<<"$labels" | head -n1 || true)
   priority=$(sed -n 's/^priority://p' <<<"$labels" | head -n1 || true)
+  sprint=$(sed -n 's/^sprint://p' <<<"$labels" | head -n1 || true)
+
   [[ -n "$subject" ]] && set_single "$item_id" Subject "$subject"
   [[ -n "$priority" ]] && set_single "$item_id" Priority "$priority"
-  set_single "$item_id" Sprint "Sprint 1"
+  if [[ "$sprint" =~ ^([1-9]|1[0-6])$ ]]; then
+    set_single "$item_id" Sprint "Sprint $sprint"
+  fi
 done
 
 log "Q5 Project sync complete"
